@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Library System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        teal: {
+                            50: '#f0fdfa',
+                            100: '#ccfbf1',
+                            200: '#99f6e4',
+                            500: '#14b8a6',
+                            600: '#0d9488',
+                            700: '#0f766e',
+                            800: '#115e59',
+                            900: '#134e4a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- OCR Library for reading book cover titles -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .fade-in { animation: fadeIn 0.25s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #0d9488; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.8s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 antialiased min-h-screen flex flex-col transition-colors duration-200">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Navigation Header -->
+    <nav class="bg-teal-700 dark:bg-teal-900 text-white shadow-md sticky top-0 z-40 border-b border-teal-800">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="goHome()">
+                <div class="p-2 bg-teal-800 dark:bg-teal-950 rounded-xl shadow-inner">
+                    <svg class="w-6 h-6 text-sky-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                    </svg>
+                </div>
+                <div>
+                    <span class="font-bold text-xl tracking-wide block leading-tight">EduLibrary</span>
+                    <span class="text-xs text-teal-200">School Checkout & Management</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <!-- Theme Toggle Button -->
+                <button onclick="toggleDarkMode()" title="Toggle Dark/Light Mode" class="p-2 rounded-xl bg-teal-800/60 hover:bg-teal-800 text-teal-100 transition-colors border border-teal-600/40">
+                    <svg id="theme-icon-moon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                    <svg id="theme-icon-sun" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                </button>
+
+                <div id="nav-user-info" class="hidden flex items-center gap-3">
+                    <div class="text-right hidden sm:block">
+                        <div id="nav-username" class="font-semibold text-sm leading-tight"></div>
+                        <div id="nav-role" class="text-xs text-teal-200 uppercase tracking-wider"></div>
+                    </div>
+                    <button onclick="logout()" class="bg-teal-800 hover:bg-teal-900 text-white px-3 py-1.5 rounded-xl text-sm font-medium transition-colors border border-teal-600/50">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Container -->
+    <main class="flex-grow flex items-start justify-center p-4 max-w-6xl mx-auto w-full">
+        
+        <!-- ================= SCREEN: LOGIN ================= -->
+        <div id="screen-login" class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 my-auto fade-in border border-slate-100 dark:border-slate-700">
+            <div class="text-center mb-6">
+                <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Library Portal</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Select your role to access the library</p>
+            </div>
+
+            <!-- Login Role Selector Tabs -->
+            <div class="flex rounded-xl bg-slate-100 dark:bg-slate-700/60 p-1 mb-6">
+                <button id="btn-login-tab-student" onclick="setLoginTab('student')" class="flex-1 py-2 text-sm font-semibold rounded-lg bg-white dark:bg-slate-800 shadow-sm text-teal-600 dark:text-teal-400 transition-all">Student Login</button>
+                <button id="btn-login-tab-admin" onclick="setLoginTab('admin')" class="flex-1 py-2 text-sm font-semibold rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 transition-all">Admin Access</button>
+            </div>
+
+            <!-- Student Login Form -->
+            <form id="form-login-student" onsubmit="handleStudentLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Select Student Account</label>
+                    <select id="login-student-select" class="w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-teal-500 outline-none bg-slate-50 dark:bg-slate-700 dark:border-slate-600 text-slate-800 dark:text-white font-medium">
+                        <!-- Options populated via JS -->
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl shadow-md transition-all">Enter Student Dashboard</button>
+            </form>
+
+            <!-- Admin Login Form -->
+            <form id="form-login-admin" onsubmit="handleAdminLogin(event)" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Admin Passcode</label>
+                    <input type="password" id="login-admin-pass" placeholder="Enter passcode" class="w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-teal-500 outline-none bg-slate-50 dark:bg-slate-700 dark:border-slate-600 text-slate-800 dark:text-white font-medium">
+                </div>
+                <button type="submit" class="w-full bg-slate-900 dark:bg-teal-800 hover:bg-slate-800 dark:hover:bg-teal-700 text-white font-bold py-3 rounded-xl shadow-md transition-all">Log In as Administrator</button>
+            </form>
+        </div>
+
+        <!-- ================= SCREEN: STUDENT DASHBOARD ================= -->
+        <div id="screen-student" class="w-full hidden fade-in py-4">
+            <!-- Overdue Warning Banner -->
+            <div id="student-overdue-alert" class="hidden mb-4 p-4 bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-800 rounded-xl text-red-800 dark:text-red-200 text-sm font-semibold flex items-center gap-3">
+                <svg class="w-6 h-6 flex-shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>⚠️ You have an overdue book! You cannot check out new books until all overdue items are returned.</span>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-6 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <div class="flex gap-2">
+                    <button onclick="switchStudentTab('library')" id="tab-stu-library" class="px-4 py-2 rounded-lg font-semibold text-sm transition-all bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400">Browse Catalog</button>
+                    <button onclick="switchStudentTab('mybooks')" id="tab-stu-mybooks" class="px-4 py-2 rounded-lg font-semibold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center gap-2">
+                        My Checked Out Books
+                        <span id="badge-my-count" class="bg-teal-600 text-white text-xs px-2 py-0.5 rounded-full font-bold">0</span>
+                    </button>
+                </div>
+                <div class="relative w-full sm:w-64">
+                    <input type="text" id="search-student-catalog" onkeyup="filterStudentCatalog()" placeholder="Search title, genre, or shelf..." class="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+
+            <!-- Student: Library Tab -->
+            <div id="stu-tab-library">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="student-catalog-list">
+                    <!-- Books dynamically rendered here -->
+                </div>
+            </div>
+
+            <!-- Student: My Books Tab -->
+            <div id="stu-tab-mybooks" class="hidden">
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+                    <div id="no-books-msg" class="p-12 text-center text-slate-500 dark:text-slate-400 hidden">
+                        <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                        <p class="font-medium text-lg text-slate-700 dark:text-slate-200">No books checked out</p>
+                        <p class="text-sm text-slate-400 mt-1">Browse the library catalog to borrow a book.</p>
+                    </div>
+                    <ul id="my-books-list" class="divide-y divide-slate-100 dark:divide-slate-700">
+                        <!-- Checked out books rendered here -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= SCREEN: ADMIN DASHBOARD ================= -->
+        <div id="screen-admin" class="w-full hidden fade-in py-4">
+            <!-- Navigation Header for Admin -->
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-6 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="switchAdminTab('catalog')" id="tab-adm-catalog" class="px-4 py-2 rounded-lg font-semibold text-sm transition-all bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400">Master Book Catalog</button>
+                    <button onclick="switchAdminTab('students')" id="tab-adm-students" class="px-4 py-2 rounded-lg font-semibold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center gap-2">
+                        Student Accounts
+                        <span id="badge-students-count" class="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs px-2 py-0.5 rounded-full font-bold">0</span>
+                    </button>
+                    <button onclick="switchAdminTab('add')" id="tab-adm-add" class="px-4 py-2 rounded-lg font-semibold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">+ Add New Book</button>
+                    <button onclick="switchAdminTab('settings')" id="tab-adm-settings" class="px-4 py-2 rounded-lg font-semibold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center gap-1">
+                        <span>⚙️ Library Settings & Backup</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Admin Tab 1: Master Catalog -->
+            <div id="adm-tab-catalog" class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                    <!-- Filter Buttons -->
+                    <div class="flex gap-2">
+                        <button onclick="filterAdminCatalog('all')" id="filter-btn-all" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-800 text-white">All Books</button>
+                        <button onclick="filterAdminCatalog('available')" id="filter-btn-available" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">Available</button>
+                        <button onclick="filterAdminCatalog('checked_out')" id="filter-btn-checked_out" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">Checked Out</button>
+                        <button onclick="filterAdminCatalog('overdue')" id="filter-btn-overdue" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">Overdue</button>
+                    </div>
+                    <!-- Search Field -->
+                    <input type="text" id="search-admin-catalog" onkeyup="renderAdminCatalog()" placeholder="Search title, shelf, genre or borrower..." class="px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-white w-full sm:w-64">
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-x-auto">
+                    <table class="min-w-full text-left text-sm whitespace-nowrap">
+                        <thead class="uppercase text-xs tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 font-bold">
+                            <tr>
+                                <th scope="col" class="px-6 py-4">Title</th>
+                                <th scope="col" class="px-6 py-4">Shelf / Genre</th>
+                                <th scope="col" class="px-6 py-4">Status</th>
+                                <th scope="col" class="px-6 py-4">Borrower</th>
+                                <th scope="col" class="px-6 py-4">Due Date</th>
+                                <th scope="col" class="px-6 py-4 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-catalog-tbody" class="divide-y divide-slate-100 dark:divide-slate-700">
+                            <!-- Rows dynamically populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Admin Tab 2: Manage Student Accounts -->
+            <div id="adm-tab-students" class="hidden space-y-6">
+                <!-- Add Student Box -->
+                <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+                        Create New Student Account
+                    </h3>
+                    <form onsubmit="createNewStudent(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">Student ID #</label>
+                            <input type="text" id="new-stu-id" placeholder="e.g. STU-104" required class="w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">Full Name</label>
+                            <input type="text" id="new-stu-name" placeholder="e.g. Sarah Jenkins" required class="w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">Grade / Class</label>
+                            <div class="flex gap-2">
+                                <select id="new-stu-grade" class="w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none bg-white dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                                    <option value="Grade 6">Grade 6</option>
+                                    <option value="Grade 7">Grade 7</option>
+                                    <option value="Grade 8">Grade 8</option>
+                                    <option value="Grade 9">Grade 9</option>
+                                    <option value="Grade 10">Grade 10</option>
+                                    <option value="Grade 11">Grade 11</option>
+                                    <option value="Grade 12">Grade 12</option>
+                                </select>
+                                <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-6 py-2 rounded-lg text-sm whitespace-nowrap transition-colors shadow-sm">Save Student</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Students Table -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-x-auto">
+                    <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+                        <h4 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Enrolled Students</h4>
+                        <input type="text" id="search-student-accounts" onkeyup="renderStudentsList()" placeholder="Filter students..." class="px-3 py-1.5 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-teal-500 dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                    </div>
+                    <table class="min-w-full text-left text-sm whitespace-nowrap">
+                        <thead class="uppercase text-xs tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 font-bold">
+                            <tr>
+                                <th scope="col" class="px-6 py-3">Student ID</th>
+                                <th scope="col" class="px-6 py-3">Name</th>
+                                <th scope="col" class="px-6 py-3">Grade</th>
+                                <th scope="col" class="px-6 py-3">Books Checked Out</th>
+                                <th scope="col" class="px-6 py-3 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-students-tbody" class="divide-y divide-slate-100 dark:divide-slate-700">
+                            <!-- Rows dynamically populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Admin Tab 3: Add Book -->
+            <div id="adm-tab-add" class="hidden">
+                <div class="max-w-2xl mx-auto bg-white dark:bg-slate-800 p-8 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                    <h3 class="text-2xl font-bold mb-6 text-slate-900 dark:text-white">Add Book to Library</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Manual Entry Form -->
+                        <div class="space-y-4">
+                            <h4 class="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-slate-100 dark:border-slate-700 pb-2">Manual Information</h4>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">Book Title <span class="text-red-500">*</span></label>
+                                <input type="text" id="add-title" placeholder="e.g. The Great Gatsby" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm font-medium dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">Shelf / Location</label>
+                                <input type="text" id="add-shelf" placeholder="e.g. Shelf A-3, Row 2" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm font-medium dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">Genre</label>
+                                <input type="text" id="add-genre" placeholder="e.g. Fiction, Sci-Fi, History" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm font-medium dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                            </div>
+                            <button onclick="addBookManual()" class="w-full bg-teal-600 text-white font-bold py-2.5 rounded-lg hover:bg-teal-700 transition-colors shadow-md text-sm">Add Book to Catalog</button>
+                        </div>
+
+                        <!-- Scanner / OCR Section -->
+                        <div class="flex flex-col border-t md:border-t-0 md:border-l pt-6 md:pt-0 md:pl-8 border-slate-100 dark:border-slate-700">
+                            <h4 class="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-slate-100 dark:border-slate-700 pb-2 mb-4">Scan Book Cover</h4>
+                            
+                            <div id="scanner-container" class="bg-slate-900 rounded-xl flex items-center justify-center min-h-[220px] max-h-[260px] mb-4 relative overflow-hidden shadow-inner">
+                                <video id="video-feed" class="hidden w-full h-full object-cover" autoplay playsinline muted></video>
+                                <canvas id="canvas-snapshot" class="hidden"></canvas>
+                                <img id="file-preview-img" class="hidden w-full h-full object-contain" alt="Book cover preview">
+                                
+                                <div id="scanner-placeholder" class="text-center text-slate-400 p-4">
+                                    <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                    <p class="text-xs font-medium">Turn on camera or upload photo of book cover</p>
+                                </div>
+
+                                <!-- Loading overlay during OCR processing -->
+                                <div id="ocr-loader" class="absolute inset-0 bg-slate-900/85 backdrop-blur-sm flex flex-col items-center justify-center hidden text-white text-center p-4">
+                                    <div class="spinner mb-3"></div>
+                                    <p id="ocr-status-text" class="text-xs font-semibold">Reading title from cover with AI...</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2 mb-2">
+                                <button id="btn-start-scan" onclick="startScanner()" class="bg-slate-800 text-white font-bold py-2 px-2 rounded-lg hover:bg-slate-700 transition-colors text-xs flex items-center justify-center gap-1">
+                                    <span>📹 Turn On Camera</span>
+                                </button>
+                                <button onclick="triggerFileUpload()" class="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 font-bold py-2 px-2 rounded-lg transition-colors text-xs flex items-center justify-center gap-1 border dark:border-slate-600">
+                                    <span>📁 Upload Photo</span>
+                                </button>
+                            </div>
+                            <input type="file" id="cover-file-input" accept="image/*" onchange="handleFileUpload(event)" class="hidden">
+
+                            <button id="btn-capture-scan" onclick="captureAndRead()" class="w-full bg-teal-600 text-white font-bold py-2.5 rounded-lg hover:bg-teal-700 transition-colors text-sm mb-2 hidden shadow-md">📷 Capture & Read Title</button>
+                            <button id="btn-stop-scan" onclick="stopScanner()" class="w-full bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 font-semibold py-2 rounded-lg hover:bg-red-200 transition-colors text-xs hidden">Turn Off Camera</button>
+                            
+                            <p class="text-xs text-slate-400 text-center mt-2">Position book cover clearly. AI will extract the title into the form.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Tab 4: Library Settings & Backup -->
+            <div id="adm-tab-settings" class="hidden space-y-6">
+                <!-- Checkout Rules Configuration -->
+                <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
+                        Checkout Rules & Restrictions
+                    </h3>
+                    <form onsubmit="saveCheckoutSettings(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">Max Books per Student</label>
+                            <input type="number" id="setting-max-books" min="1" max="20" required class="w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-white font-semibold">
+                            <p class="text-xs text-slate-400 mt-1">Maximum number of active books a student can check out at once.</p>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">Borrowing Duration (Days)</label>
+                            <input type="number" id="setting-loan-days" min="1" max="365" required class="w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-white font-semibold">
+                            <p class="text-xs text-slate-400 mt-1">Number of days before a checked-out book becomes overdue.</p>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition-colors shadow-sm">Save Checkout Rules</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Admin Security / Passcode Settings -->
+                <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                        Change Admin Passcode
+                    </h3>
+                    <form onsubmit="changeAdminPasscode(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">Current Passcode</label>
+                            <input type="password" id="pass-current" required placeholder="Enter current passcode" class="w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">New Passcode</label>
+                            <input type="password" id="pass-new" required placeholder="Enter new passcode" class="w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:bg-slate-700 dark:border-slate-600 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">&nbsp;</label>
+                            <button type="submit" class="w-full bg-slate-900 dark:bg-teal-800 hover:bg-slate-800 dark:hover:bg-teal-700 text-white font-bold py-2 rounded-lg text-sm transition-colors shadow-sm">Update Passcode</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Backup & Safe Data Management -->
+                <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                        Library Data Safety & Backup
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-6">Your data is stored safely in local browser memory. You can export a full backup JSON file to store offline or restore data anytime.</p>
+                    
+                    <div class="flex flex-wrap items-center gap-4">
+                        <button onclick="exportBackupData()" class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-5 py-2.5 rounded-lg text-sm transition-colors shadow-sm flex items-center gap-2">
+                            <span>📥 Export Backup (JSON)</span>
+                        </button>
+                        <div class="relative">
+                            <button onclick="document.getElementById('import-file-input').click()" class="bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-800 dark:text-slate-200 border dark:border-slate-600 font-bold px-5 py-2.5 rounded-lg text-sm transition-colors shadow-sm flex items-center gap-2">
+                                <span>📤 Import / Restore Backup</span>
+                            </button>
+                            <input type="file" id="import-file-input" accept=".json" onchange="importBackupData(event)" class="hidden">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- DATA STATE INITIALIZATION ---
+        const INITIAL_STUDENTS = [
+            { id: "STU-101", name: "Alice Smith", grade: "Grade 8" },
+            { id: "STU-102", name: "Bob Jones", grade: "Grade 7" },
+            { id: "STU-103", name: "Charlie Brown", grade: "Grade 9" }
+        ];
+
+        const INITIAL_BOOKS = [
+            { id: "1", shelf: "Shelf A1", genre: "Fantasy", title: "Harry Potter and the Sorcerer's Stone", status: "available", dueDate: null, borrowerId: null, borrowerName: null },
+            { id: "2", shelf: "Shelf A2", genre: "Fantasy", title: "Harry Potter and the Deathly Hallows", status: "checked_out", dueDate: "2026-10-15", borrowerId: "STU-101", borrowerName: "Alice Smith" },
+            { id: "3", shelf: "Shelf C4", genre: "Computer Science", title: "The C Programming Language", status: "available", dueDate: null, borrowerId: null, borrowerName: null },
+            { id: "4", shelf: "Shelf B1", genre: "Classic Fiction", title: "To Kill a Mockingbird", status: "checked_out", dueDate: "2026-11-01", borrowerId: "STU-102", borrowerName: "Bob Jones" }
+        ];
+
+        const DEFAULT_SETTINGS = {
+            maxBooksPerStudent: 3,
+            checkoutDays: 14,
+            adminPasscode: "1234",
+            darkMode: false
+        };
+
+        let studentsList = JSON.parse(localStorage.getItem('edu_library_students')) || INITIAL_STUDENTS;
+        let libraryCatalog = JSON.parse(localStorage.getItem('edu_library_catalog')) || INITIAL_BOOKS;
+        let settings = JSON.parse(localStorage.getItem('edu_library_settings')) || DEFAULT_SETTINGS;
+
+        let currentUser = null; // { role: 'admin' | 'student', id: string, name: string }
+        let videoStream = null;
+        let currentAdminFilter = 'all';
+
+        function saveData() {
+            localStorage.setItem('edu_library_students', JSON.stringify(studentsList));
+            localStorage.setItem('edu_library_catalog', JSON.stringify(libraryCatalog));
+            localStorage.setItem('edu_library_settings', JSON.stringify(settings));
+        }
+
+        // --- DARK MODE THEME SYSTEM ---
+        function applyTheme() {
+            if (settings.darkMode) {
+                document.documentElement.classList.add('dark');
+                document.getElementById('theme-icon-sun').classList.remove('hidden');
+                document.getElementById('theme-icon-moon').classList.add('hidden');
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.getElementById('theme-icon-sun').classList.add('hidden');
+                document.getElementById('theme-icon-moon').classList.remove('hidden');
+            }
+        }
+
+        function toggleDarkMode() {
+            settings.darkMode = !settings.darkMode;
+            applyTheme();
+            saveData();
+        }
+
+        // --- TOAST NOTIFICATIONS ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const bgColors = {
+                'success': 'bg-teal-600',
+                'error': 'bg-red-600',
+                'info': 'bg-sky-600',
+                'warning': 'bg-amber-500'
+            };
+            
+            toast.className = `${bgColors[type] || bgColors['info']} text-white px-5 py-3 rounded-xl shadow-xl font-medium text-sm flex items-center gap-2 transform transition-all duration-300 translate-x-full pointer-events-auto`;
+            toast.innerHTML = `<span>${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => toast.classList.remove('translate-x-full'), 10);
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+
+        // --- AUTH & LOGIN LOGIC ---
+        function populateStudentDropdown() {
+            const select = document.getElementById('login-student-select');
+            select.innerHTML = '';
+            if (studentsList.length === 0) {
+                select.innerHTML = `<option value="">No students enrolled yet</option>`;
+                return;
+            }
+            studentsList.forEach(stu => {
+                const opt = document.createElement('option');
+                opt.value = stu.id;
+                opt.innerText = `${stu.name} (${stu.id} - ${stu.grade})`;
+                select.appendChild(opt);
+            });
+        }
+
+        function setLoginTab(role) {
+            const btnStu = document.getElementById('btn-login-tab-student');
+            const btnAdm = document.getElementById('btn-login-tab-admin');
+            const formStu = document.getElementById('form-login-student');
+            const formAdm = document.getElementById('form-login-admin');
+
+            if (role === 'student') {
+                btnStu.className = "flex-1 py-2 text-sm font-semibold rounded-lg bg-white dark:bg-slate-800 shadow-sm text-teal-600 dark:text-teal-400 transition-all";
+                btnAdm.className = "flex-1 py-2 text-sm font-semibold rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 transition-all";
+                formStu.classList.remove('hidden');
+                formAdm.classList.add('hidden');
+            } else {
+                btnAdm.className = "flex-1 py-2 text-sm font-semibold rounded-lg bg-white dark:bg-slate-800 shadow-sm text-teal-600 dark:text-teal-400 transition-all";
+                btnStu.className = "flex-1 py-2 text-sm font-semibold rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 transition-all";
+                formAdm.classList.remove('hidden');
+                formStu.classList.add('hidden');
+            }
+        }
+
+        function handleStudentLogin(e) {
+            e.preventDefault();
+            const selectedId = document.getElementById('login-student-select').value;
+            const stu = studentsList.find(s => s.id === selectedId);
+            if (!stu) {
+                showToast('Please select a valid student account.', 'warning');
+                return;
+            }
+            currentUser = { role: 'student', id: stu.id, name: stu.name };
+            loginSuccess();
+        }
+
+        function handleAdminLogin(e) {
+            e.preventDefault();
+            const pass = document.getElementById('login-admin-pass').value.trim();
+            const correctPass = settings.adminPasscode || '1234';
+            
+            if (pass !== correctPass) {
+                showToast('Invalid admin passcode.', 'error');
+                return;
+            }
+            currentUser = { role: 'admin', id: 'ADMIN-1', name: 'Librarian Admin' };
+            loginSuccess();
+        }
+
+        function loginSuccess() {
+            document.getElementById('screen-login').classList.add('hidden');
+            document.getElementById('nav-user-info').classList.remove('hidden');
+            document.getElementById('nav-username').innerText = currentUser.name;
+            document.getElementById('nav-role').innerText = currentUser.role === 'admin' ? 'Administrator' : `Student ID: ${currentUser.id}`;
+
+            if (currentUser.role === 'student') {
+                document.getElementById('screen-student').classList.remove('hidden');
+                switchStudentTab('library');
+            } else {
+                document.getElementById('screen-admin').classList.remove('hidden');
+                switchAdminTab('catalog');
+            }
+            showToast(`Welcome back, ${currentUser.name}!`, 'success');
+        }
+
+        function logout() {
+            currentUser = null;
+            stopScanner();
+            document.getElementById('nav-user-info').classList.add('hidden');
+            document.getElementById('screen-student').classList.add('hidden');
+            document.getElementById('screen-admin').classList.add('hidden');
+            document.getElementById('screen-login').classList.remove('hidden');
+            document.getElementById('login-admin-pass').value = '';
+            populateStudentDropdown();
+            showToast('Logged out safely.', 'info');
+        }
+
+        function goHome() {
+            if (currentUser) {
+                if (currentUser.role === 'student') switchStudentTab('library');
+                else switchAdminTab('catalog');
+            }
+        }
+
+        // --- STUDENT DASHBOARD LOGIC ---
+        function switchStudentTab(tab) {
+            document.getElementById('stu-tab-library').classList.toggle('hidden', tab !== 'library');
+            document.getElementById('stu-tab-mybooks').classList.toggle('hidden', tab !== 'mybooks');
+
+            const btnLib = document.getElementById('tab-stu-library');
+            const btnMy = document.getElementById('tab-stu-mybooks');
+
+            if (tab === 'library') {
+                btnLib.className = "px-4 py-2 rounded-lg font-semibold text-sm transition-all bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400";
+                btnMy.className = "px-4 py-2 rounded-lg font-semibold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center gap-2";
+                renderStudentCatalog();
+            } else {
+                btnMy.className = "px-4 py-2 rounded-lg font-semibold text-sm transition-all bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center gap-2";
+                btnLib.className = "px-4 py-2 rounded-lg font-semibold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all";
+                renderMyBooks();
+            }
+            checkStudentOverdueStatus();
+            updateMyBooksBadge();
+        }
+
+        function checkStudentOverdueStatus() {
+            if (!currentUser || currentUser.role !== 'student') return false;
+            const todayStr = new Date().toISOString().split('T')[0];
+            const hasOverdue = libraryCatalog.some(b => 
+                b.status === 'checked_out' && 
+                b.borrowerId === currentUser.id && 
+                b.dueDate && b.dueDate < todayStr
+            );
+
+            const alertBanner = document.getElementById('student-overdue-alert');
+            if (hasOverdue) alertBanner.classList.remove('hidden');
+            else alertBanner.classList.add('hidden');
+
+            return hasOverdue;
+        }
+
+        function updateMyBooksBadge() {
+            if (!currentUser || currentUser.role !== 'student') return;
+            const count = libraryCatalog.filter(b => b.status === 'checked_out' && b.borrowerId === currentUser.id).length;
+            document.getElementById('badge-my-count').innerText = count;
+        }
+
+        function filterStudentCatalog() {
+            renderStudentCatalog();
+        }
+
+        function renderStudentCatalog() {
+            const container = document.getElementById('student-catalog-list');
+            container.innerHTML = '';
+            
+            const query = (document.getElementById('search-student-catalog').value || '').toLowerCase();
+            const availableBooks = libraryCatalog.filter(b => 
+                b.status === 'available' && 
+                (b.title.toLowerCase().includes(query) || 
+                 (b.shelf && b.shelf.toLowerCase().includes(query)) ||
+                 (b.genre && b.genre.toLowerCase().includes(query)))
+            );
+
+            if (availableBooks.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full p-12 text-center text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+                        <p class="font-semibold text-slate-700 dark:text-slate-300">No available books found</p>
+                        <p class="text-xs text-slate-400 mt-1">Try clearing your search query or check back later.</p>
+                    </div>`;
+                return;
+            }
+
+            const hasOverdue = checkStudentOverdueStatus();
+
+            availableBooks.forEach(book => {
+                const card = document.createElement('div');
+                card.className = "bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col justify-between hover:shadow-md transition-all";
+                card.innerHTML = `
+                    <div>
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <span class="inline-block px-2.5 py-0.5 bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 text-xs font-bold rounded-md">Available</span>
+                            <span class="text-xs text-slate-400 font-semibold">${book.genre || 'General'}</span>
+                        </div>
+                        <h4 class="font-bold text-slate-900 dark:text-white leading-snug mb-2 text-base">${book.title}</h4>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-1">
+                            <span>📍 Location:</span>
+                            <span class="font-medium text-slate-700 dark:text-slate-300">${book.shelf || 'Unassigned'}</span>
+                        </p>
+                    </div>
+                    <button onclick="checkoutBook('${book.id}')" ${hasOverdue ? 'disabled' : ''} class="w-full ${hasOverdue ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed text-slate-500' : 'bg-teal-600 hover:bg-teal-700 text-white shadow-sm'} font-bold py-2 rounded-lg transition-colors text-sm">
+                        ${hasOverdue ? 'Blocked (Overdue Book)' : 'Check Out Book'}
+                    </button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderMyBooks() {
+            const list = document.getElementById('my-books-list');
+            const noMsg = document.getElementById('no-books-msg');
+            list.innerHTML = '';
+
+            const myBooks = libraryCatalog.filter(b => b.status === 'checked_out' && b.borrowerId === currentUser.id);
+
+            if (myBooks.length === 0) {
+                noMsg.classList.remove('hidden');
+            } else {
+                noMsg.classList.add('hidden');
+                myBooks.forEach(book => {
+                    const due = new Date(book.dueDate);
+                    const today = new Date();
+                    today.setHours(0,0,0,0);
+                    const isOverdue = due < today;
+
+                    const li = document.createElement('li');
+                    li.className = "p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors";
+                    li.innerHTML = `
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <h4 class="font-bold text-slate-900 dark:text-white">${book.title}</h4>
+                                <span class="px-2 py-0.5 text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded">${book.genre || 'General'}</span>
+                            </div>
+                            <p class="text-xs text-slate-400">Location: ${book.shelf || 'Unassigned'}</p>
+                            <div class="mt-2 text-xs font-bold flex items-center gap-1.5 ${isOverdue ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                Due Date: ${book.dueDate} ${isOverdue ? '⚠️ (OVERDUE - PLEASE RETURN IMMEDIATELY)' : ''}
+                            </div>
+                        </div>
+                        <button onclick="returnBook('${book.id}')" class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-5 py-2 rounded-lg text-sm transition-colors shadow-sm w-full sm:w-auto">Return Book</button>
+                    `;
+                    list.appendChild(li);
+                });
+            }
+        }
+
+        function checkoutBook(bookId) {
+            if (!currentUser || currentUser.role !== 'student') return;
+
+            const todayStr = new Date().toISOString().split('T')[0];
+            const myBooks = libraryCatalog.filter(b => b.status === 'checked_out' && b.borrowerId === currentUser.id);
+
+            // Rule 1: Cannot checkout if student has OVERDUE books
+            const hasOverdue = myBooks.some(b => b.dueDate && b.dueDate < todayStr);
+            if (hasOverdue) {
+                showToast('⚠️ You have overdue books! Please return them before checking out new ones.', 'error');
+                return;
+            }
+
+            // Rule 2: Cannot checkout if student reached MAX ALLOWED LIMIT
+            const maxAllowed = settings.maxBooksPerStudent || 3;
+            if (myBooks.length >= maxAllowed) {
+                showToast(`⚠️ You have reached your checkout limit (${maxAllowed} books max).`, 'warning');
+                return;
+            }
+
+            const book = libraryCatalog.find(b => b.id === bookId);
+            if (book && book.status === 'available') {
+                book.status = 'checked_out';
+                book.borrowerId = currentUser.id;
+                book.borrowerName = currentUser.name;
+
+                // Set due date based on admin configured days
+                const loanDays = settings.checkoutDays || 14;
+                const due = new Date();
+                due.setDate(due.getDate() + loanDays);
+                book.dueDate = due.toISOString().split('T')[0];
+
+                saveData();
+                showToast(`Checked out "${book.title}"! Due in ${loanDays} days.`, 'success');
+                renderStudentCatalog();
+                updateMyBooksBadge();
+            }
+        }
+
+        function returnBook(bookId) {
+            const book = libraryCatalog.find(b => b.id === bookId);
+            if (book && book.status === 'checked_out') {
+                book.status = 'available';
+                book.borrowerId = null;
+                book.borrowerName = null;
+                book.dueDate = null;
+
+                saveData();
+                showToast(`Returned "${book.title}". Thank you!`, 'success');
+                renderMyBooks();
+                updateMyBooksBadge();
+            }
+        }
+
+        // --- ADMIN DASHBOARD LOGIC ---
+        function switchAdminTab(tab) {
+            document.getElementById('adm-tab-catalog').classList.toggle('hidden', tab !== 'catalog');
+            document.getElementById('adm-tab-students').classList.toggle('hidden', tab !== 'students');
+            document.getElementById('adm-tab-add').classList.toggle('hidden', tab !== 'add');
+            document.getElementById('adm-tab-settings').classList.toggle('hidden', tab !== 'settings');
+
+            document.getElementById('tab-adm-catalog').className = tab === 'catalog' ? "px-4 py-2 rounded-lg font-semibold text-sm transition-all bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400" : "px-4 py-2 rounded-lg font-semibold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all";
+            document.getElementById('tab-adm-students').className = tab === 'students' ? "px-4 py-2 rounded-lg font-semibold text-sm transition-all bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center gap-2" : "px-4 py-2 rounded-lg font-semibold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center gap-2";
+            document.getElementById('tab-adm-add').className = tab === 'add' ? "px-4 py-2 rounded-lg font-semibold text-sm transition-all bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400" : "px-4 py-2 rounded-lg font-semibold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all";
+            document.getElementById('tab-adm-settings').className = tab === 'settings' ? "px-4 py-2 rounded-lg font-semibold text-sm transition-all bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center gap-1" : "px-4 py-2 rounded-lg font-semibold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center gap-1";
+
+            if (tab === 'catalog') renderAdminCatalog();
+            if (tab === 'students') renderStudentsList();
+            if (tab === 'settings') populateAdminSettingsForm();
+            if (tab !== 'add') stopScanner();
+            
+            updateAdminBadges();
+        }
+
+        function updateAdminBadges() {
+            document.getElementById('badge-students-count').innerText = studentsList.length;
+        }
+
+        function filterAdminCatalog(filter) {
+            currentAdminFilter = filter;
+            const filters = ['all', 'available', 'checked_out', 'overdue'];
+            filters.forEach(f => {
+                const btn = document.getElementById(`filter-btn-${f}`);
+                if (btn) {
+                    if (f === filter) {
+                        btn.className = "px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-800 text-white";
+                    } else {
+                        btn.className = "px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300";
+                    }
+                }
+            });
+            renderAdminCatalog();
+        }
+
+        function renderAdminCatalog() {
+            const tbody = document.getElementById('admin-catalog-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            const searchInput = document.getElementById('search-admin-catalog');
+            const search = ((searchInput && searchInput.value) || '').toLowerCase();
+            const today = new Date();
+            today.setHours(0,0,0,0);
+
+            let filtered = libraryCatalog.filter(book => {
+                const matchesSearch = book.title.toLowerCase().includes(search) || 
+                                      (book.shelf && book.shelf.toLowerCase().includes(search)) ||
+                                      (book.genre && book.genre.toLowerCase().includes(search)) ||
+                                      (book.borrowerName && book.borrowerName.toLowerCase().includes(search));
+
+                if (!matchesSearch) return false;
+
+                if (currentAdminFilter === 'available') return book.status === 'available';
+                if (currentAdminFilter === 'checked_out') return book.status === 'checked_out';
+                if (currentAdminFilter === 'overdue') {
+                    if (book.status !== 'checked_out' || !book.dueDate) return false;
+                    return new Date(book.dueDate) < today;
+                }
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-slate-400">No matching books found.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(book => {
+                const isAvail = book.status === 'available';
+                const isOverdue = !isAvail && book.dueDate && new Date(book.dueDate) < today;
+
+                let statusBadge = isAvail
+                    ? `<span class="px-2.5 py-1 text-xs font-bold rounded-full bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300">Available</span>`
+                    : isOverdue 
+                        ? `<span class="px-2.5 py-1 text-xs font-bold rounded-full bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300">Checked Out (Overdue)</span>`
+                        : `<span class="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">Checked Out</span>`;
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors";
+                tr.innerHTML = `
+                    <td class="px-6 py-4 font-semibold text-slate-900 dark:text-white">${book.title}</td>
+                    <td class="px-6 py-4 text-xs text-slate-600 dark:text-slate-300">
+                        <span class="font-medium">${book.shelf || 'Unassigned'}</span>
+                        <span class="text-slate-400"> • </span>
+                        <span class="italic">${book.genre || 'General'}</span>
+                    </td>
+                    <td class="px-6 py-4">${statusBadge}</td>
+                    <td class="px-6 py-4 text-xs font-medium text-slate-700 dark:text-slate-300">${book.borrowerName ? `${book.borrowerName} (${book.borrowerId})` : '-'}</td>
+                    <td class="px-6 py-4 text-xs ${isOverdue ? 'font-bold text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}">${book.dueDate || '-'}</td>
+                    <td class="px-6 py-4 text-center">
+                        <button onclick="deleteBook('${book.id}')" class="text-red-500 hover:text-red-700 font-semibold text-xs">Remove</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function deleteBook(bookId) {
+            libraryCatalog = libraryCatalog.filter(b => b.id !== bookId);
+            saveData();
+            showToast('Book removed from library catalog.', 'info');
+            renderAdminCatalog();
+        }
+
+        function createNewStudent(e) {
+            e.preventDefault();
+            const id = document.getElementById('new-stu-id').value.trim();
+            const name = document.getElementById('new-stu-name').value.trim();
+            const grade = document.getElementById('new-stu-grade').value;
+
+            if (!id || !name) {
+                showToast('Student ID and Name are required.', 'warning');
+                return;
+            }
+
+            if (studentsList.some(s => s.id.toLowerCase() === id.toLowerCase())) {
+                showToast(`Student ID "${id}" already exists.`, 'error');
+                return;
+            }
+
+            studentsList.push({ id, name, grade });
+            saveData();
+            
+            document.getElementById('new-stu-id').value = '';
+            document.getElementById('new-stu-name').value = '';
+
+            showToast(`Created account for student ${name}!`, 'success');
+            renderStudentsList();
+            updateAdminBadges();
+            populateStudentDropdown();
+        }
+
+        function renderStudentsList() {
+            const tbody = document.getElementById('admin-students-tbody');
+            tbody.innerHTML = '';
+
+            const search = (document.getElementById('search-student-accounts').value || '').toLowerCase();
+            const filtered = studentsList.filter(s => 
+                s.name.toLowerCase().includes(search) || 
+                s.id.toLowerCase().includes(search) || 
+                s.grade.toLowerCase().includes(search)
+            );
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-6 text-center text-slate-400 text-xs">No student accounts found.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(stu => {
+                const checkedOutCount = libraryCatalog.filter(b => b.borrowerId === stu.id).length;
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors";
+                tr.innerHTML = `
+                    <td class="px-6 py-3 font-mono text-xs font-bold text-slate-800 dark:text-slate-200">${stu.id}</td>
+                    <td class="px-6 py-3 font-semibold text-slate-900 dark:text-white">${stu.name}</td>
+                    <td class="px-6 py-3 text-xs text-slate-600 dark:text-slate-300">${stu.grade}</td>
+                    <td class="px-6 py-3 text-xs font-bold text-teal-600 dark:text-teal-400">${checkedOutCount} book(s)</td>
+                    <td class="px-6 py-3 text-center">
+                        <button onclick="removeStudent('${stu.id}')" class="text-red-500 hover:text-red-700 font-semibold text-xs">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function removeStudent(stuId) {
+            const hasCheckedOut = libraryCatalog.some(b => b.borrowerId === stuId);
+            if (hasCheckedOut) {
+                showToast('Cannot delete student with active checked out books!', 'warning');
+                return;
+            }
+            studentsList = studentsList.filter(s => s.id !== stuId);
+            saveData();
+            showToast('Student account deleted.', 'info');
+            renderStudentsList();
+            updateAdminBadges();
+            populateStudentDropdown();
+        }
+
+        function addBookManual() {
+            const title = document.getElementById('add-title').value.trim();
+            const shelf = document.getElementById('add-shelf').value.trim();
+            const genre = document.getElementById('add-genre').value.trim();
+
+            if (!title) {
+                showToast('Book Title is required.', 'warning');
+                return;
+            }
+
+            const newBook = {
+                id: Date.now().toString(),
+                shelf: shelf || "Unassigned Shelf",
+                genre: genre || "General",
+                title: title,
+                status: "available",
+                dueDate: null,
+                borrowerId: null,
+                borrowerName: null
+            };
+
+            libraryCatalog.push(newBook);
+            saveData();
+
+            document.getElementById('add-title').value = '';
+            document.getElementById('add-shelf').value = '';
+            document.getElementById('add-genre').value = '';
+
+            showToast(`Added "${title}" to library catalog!`, 'success');
+        }
+
+        // --- SETTINGS & BACKUP LOGIC ---
+        function populateAdminSettingsForm() {
+            document.getElementById('setting-max-books').value = settings.maxBooksPerStudent || 3;
+            document.getElementById('setting-loan-days').value = settings.checkoutDays || 14;
+        }
+
+        function saveCheckoutSettings(e) {
+            e.preventDefault();
+            const maxB = parseInt(document.getElementById('setting-max-books').value, 10);
+            const loanD = parseInt(document.getElementById('setting-loan-days').value, 10);
+
+            if (isNaN(maxB) || maxB < 1 || isNaN(loanD) || loanD < 1) {
+                showToast('Please enter valid positive numbers for settings.', 'warning');
+                return;
+            }
+
+            settings.maxBooksPerStudent = maxB;
+            settings.checkoutDays = loanD;
+            saveData();
+            showToast('Checkout rules updated successfully!', 'success');
+        }
+
+        function changeAdminPasscode(e) {
+            e.preventDefault();
+            const curr = document.getElementById('pass-current').value.trim();
+            const newP = document.getElementById('pass-new').value.trim();
+
+            if (curr !== (settings.adminPasscode || '1234')) {
+                showToast('Current passcode is incorrect.', 'error');
+                return;
+            }
+
+            if (!newP || newP.length < 3) {
+                showToast('New passcode must be at least 3 characters.', 'warning');
+                return;
+            }
+
+            settings.adminPasscode = newP;
+            saveData();
+            document.getElementById('pass-current').value = '';
+            document.getElementById('pass-new').value = '';
+            showToast('Admin passcode updated successfully!', 'success');
+        }
+
+        function exportBackupData() {
+            const backupObj = {
+                app: "EduLibrary",
+                version: "2.0",
+                exportDate: new Date().toISOString(),
+                students: studentsList,
+                catalog: libraryCatalog,
+                settings: settings
+            };
+
+            const jsonStr = JSON.stringify(backupObj, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `edulibrary_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast('Library data exported to backup file!', 'success');
+        }
+
+        function importBackupData(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const data = JSON.parse(evt.target.result);
+                    if (data && data.students && data.catalog) {
+                        studentsList = data.students;
+                        libraryCatalog = data.catalog;
+                        if (data.settings) settings = { ...DEFAULT_SETTINGS, ...data.settings };
+                        
+                        saveData();
+                        applyTheme();
+                        populateStudentDropdown();
+                        showToast('Library backup restored successfully!', 'success');
+
+                        if (currentUser) {
+                            if (currentUser.role === 'admin') switchAdminTab('catalog');
+                            else switchStudentTab('library');
+                        }
+                    } else {
+                        showToast('Invalid backup file format.', 'error');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showToast('Failed to parse backup JSON file.', 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // --- WEBCAM & OCR COVER SCANNER ---
+        async function startScanner() {
+            const video = document.getElementById('video-feed');
+            const placeholder = document.getElementById('scanner-placeholder');
+            const previewImg = document.getElementById('file-preview-img');
+            const btnStart = document.getElementById('btn-start-scan');
+            const btnCapture = document.getElementById('btn-capture-scan');
+            const btnStop = document.getElementById('btn-stop-scan');
+
+            if (previewImg) previewImg.classList.add('hidden');
+
+            try {
+                try {
+                    videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                } catch (e) {
+                    videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                }
+
+                video.srcObject = videoStream;
+                video.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+
+                await video.play();
+
+                btnStart.classList.add('hidden');
+                btnCapture.classList.remove('hidden');
+                btnStop.classList.remove('hidden');
+                showToast('Camera active. Point at book cover and click Capture.', 'info');
+            } catch (err) {
+                console.error("Camera startup error:", err);
+                showToast('Could not open camera. You can use "Upload Photo" instead.', 'error');
+            }
+        }
+
+        function triggerFileUpload() {
+            document.getElementById('cover-file-input').click();
+        }
+
+        async function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            stopScanner();
+
+            const reader = new FileReader();
+            reader.onload = async function(event) {
+                const imageDataUrl = event.target.result;
+                
+                document.getElementById('scanner-placeholder').classList.add('hidden');
+                document.getElementById('video-feed').classList.add('hidden');
+
+                const previewImg = document.getElementById('file-preview-img');
+                previewImg.src = imageDataUrl;
+                previewImg.classList.remove('hidden');
+
+                await processCoverImage(imageDataUrl);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function captureAndRead() {
+            const video = document.getElementById('video-feed');
+            const canvas = document.getElementById('canvas-snapshot');
+            const context = canvas.getContext('2d');
+
+            if (!videoStream || video.paused || video.ended) {
+                showToast('Camera feed is not ready.', 'warning');
+                return;
+            }
+
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const imageDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            await processCoverImage(imageDataUrl);
+        }
+
+        async function processCoverImage(imageDataUrl) {
+            const loader = document.getElementById('ocr-loader');
+            const statusText = document.getElementById('ocr-status-text');
+            
+            loader.classList.remove('hidden');
+            statusText.innerText = 'Analyzing cover with AI Vision...';
+
+            try {
+                let detectedTitle = '';
+                
+                try {
+                    detectedTitle = await extractTitleWithGemini(imageDataUrl);
+                } catch (apiErr) {
+                    console.warn('AI Vision unavailable, using fallback OCR engine:', apiErr);
+                    statusText.innerText = 'Running fallback OCR reader...';
+                    detectedTitle = await extractTitleWithTesseract(imageDataUrl);
+                }
+
+                if (detectedTitle && detectedTitle.toUpperCase() !== 'UNKNOWN' && detectedTitle.length > 1) {
+                    detectedTitle = detectedTitle.replace(/^["']|["']$/g, '').trim();
+                    document.getElementById('add-title').value = detectedTitle;
+                    showToast(`Title detected: "${detectedTitle}"`, 'success');
+                } else {
+                    showToast('Could not read title clearly. Please type it in manually.', 'warning');
+                }
+            } catch (err) {
+                console.error("Cover Recognition Exception:", err);
+                showToast('Failed to process image. Please enter title manually.', 'error');
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+
+        async function extractTitleWithGemini(base64DataUrl) {
+            const cleanBase64 = base64DataUrl.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{
+                    role: "user",
+                    parts: [
+                        { text: "Extract ONLY the main title of the book shown in this cover picture. Return ONLY the title text itself without author name or extra preamble. If no book title can be read, respond with 'UNKNOWN'." },
+                        { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } }
+                    ]
+                }]
+            };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error(`API response HTTP ${response.status}`);
+
+            const data = await response.json();
+            return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        }
+
+        async function extractTitleWithTesseract(imageDataUrl) {
+            if (typeof Tesseract === 'undefined') {
+                throw new Error('Tesseract OCR library not available');
+            }
+            const result = await Tesseract.recognize(imageDataUrl, 'eng');
+            let text = result.data.text.trim();
+            text = text.replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+            return text.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function stopScanner() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+
+                document.getElementById('video-feed').classList.add('hidden');
+                document.getElementById('scanner-placeholder').classList.remove('hidden');
+
+                document.getElementById('btn-start-scan').classList.remove('hidden');
+                document.getElementById('btn-capture-scan').classList.add('hidden');
+                document.getElementById('btn-stop-scan').classList.add('hidden');
+            }
+        }
+
+        // --- PAGE INITIALIZATION ---
+        window.onload = function() {
+            applyTheme();
+            populateStudentDropdown();
+        };
+    </script>
+</body>
+</html>
